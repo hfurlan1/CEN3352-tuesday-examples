@@ -20,12 +20,21 @@ if "authenticated" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state["username"] = None
 
-# If the visitor is NOT authenticated yet, show only the login form and
-# stop the script right there - st.stop() prevents every line below it
-# from running, which is what actually keeps the rest of the app hidden.
-if st.session_state["authenticated"] == False:
-    st.title("🎵 Music Explorer")
-    st.caption("Please log in to continue.")
+
+def require_login() -> bool:
+    """Show a login form and return whether the visitor is authenticated.
+
+    Each page calls this first. It does NOT stop the whole script - it
+    only tells the calling page whether to keep rendering its own content
+    or stop itself. This way the sidebar page list (built further down by
+    st.navigation) is always visible, even to a logged-out visitor - only
+    the page content behind it is gated.
+    """
+    # Already logged in - nothing more to do.
+    if st.session_state["authenticated"] == True:
+        return True
+
+    st.caption("🔒 Please log in to view this page.")
 
     # st.form groups the two inputs and the submit button so the app only reruns once, on submit.
     login_form = st.form("login_form")
@@ -54,22 +63,23 @@ if st.session_state["authenticated"] == False:
         if username_matches and password_matches:
             st.session_state["authenticated"] = True
             st.session_state["username"] = entered_username
-            # Rerun so the rest of the app replaces the form immediately.
+            # Rerun so the page's real content replaces the form immediately.
             st.rerun()
         else:
             st.error("Incorrect username or password.")
 
-    # Stop here so nothing below (the tabs, the app itself) renders
-    # while the visitor is still logged out.
-    st.stop()
+    # Still not authenticated - tell the calling page to stop rendering.
+    return False
 
-# From this point on, the visitor is authenticated. Show who's logged in
-# and give them a way to log back out.
-st.sidebar.success(f"Logged in as {st.session_state['username']}")
-if st.sidebar.button("Log out"):
-    st.session_state["authenticated"] = False
-    st.session_state["username"] = None
-    st.rerun()
+
+# Once logged in, show who's logged in and a way to log back out. This
+# lives in the sidebar so it stays visible no matter which page is open.
+if st.session_state["authenticated"] == True:
+    st.sidebar.success(f"Logged in as {st.session_state['username']}")
+    if st.sidebar.button("Log out"):
+        st.session_state["authenticated"] = False
+        st.session_state["username"] = None
+        st.rerun()
 
 # --------------------------------------------------------------------------
 # SESSION STATE
@@ -100,6 +110,11 @@ for key, default_value in default_state.items():
 # ==========================================================================
 def page_artist_compare():
     st.title("🎤 Artist Compare")
+
+    # Show the login form and stop here if the visitor isn't logged in yet.
+    if not require_login():
+        return
+
     st.markdown(
         "Search two artists via the iTunes API; each search is cached and "
         "held in `st.session_state` so the comparison below can show both "
@@ -179,6 +194,11 @@ def page_artist_compare():
 # ==========================================================================
 def page_discography_explorer():
     st.title("🎵 Discography Explorer")
+
+    # Show the login form and stop here if the visitor isn't logged in yet.
+    if not require_login():
+        return
+
     st.markdown(
         "Pulls live song data from Apple's **iTunes Search API** - no CSV, "
         "no key required. Search once, results appear below via "
@@ -226,6 +246,11 @@ def page_discography_explorer():
 # ==========================================================================
 def page_song_preview():
     st.title("🎧 Song Preview Browser")
+
+    # Show the login form and stop here if the visitor isn't logged in yet.
+    if not require_login():
+        return
+
     st.markdown(
         "Same iTunes API, different fields: this section surfaces "
         "`artworkUrl100` and `previewUrl` from the response instead of "
